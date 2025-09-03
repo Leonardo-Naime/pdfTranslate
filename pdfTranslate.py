@@ -24,18 +24,19 @@ class PDFViewer(QMainWindow):
         # --- Variáveis de Estado ---
         self.pdf_document = None
         self.current_page_index = 0
-        self.zoom_factor = 2.0  # Zoom inicial para melhor qualidade de imagem
-        self.word_map = []  # Lista para armazenar as palavras e suas coordenadas
+        self.zoom_factor = 2.0
+        self.word_map = []
         self.last_hovered_word = None
 
         # --- Componentes da Interface ---
         self.image_label = QLabel()
-        self.image_label.setMouseTracking(True) # Habilita o rastreamento do mouse
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setMouseTracking(True)
         self.image_label.mouseMoveEvent = self.on_mouse_move
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidget(self.image_label)
-        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setAlignment(Qt.AlignCenter)
         self.setCentralWidget(self.scroll_area)
 
         self.status_bar = QStatusBar()
@@ -52,12 +53,10 @@ class PDFViewer(QMainWindow):
 
     def _create_actions(self):
         """Cria as ações para a barra de ferramentas e menus."""
-        # Ação para Abrir Arquivo
         self.open_action = QAction(QIcon.fromTheme("document-open"), "&Abrir...", self)
         self.open_action.triggered.connect(self.open_pdf_file)
         self.open_action.setShortcut("Ctrl+O")
 
-        # Ações de Navegação
         self.prev_page_action = QAction(QIcon.fromTheme("go-previous"), "Página &Anterior", self)
         self.prev_page_action.triggered.connect(self.show_previous_page)
         self.prev_page_action.setShortcut("Left")
@@ -68,7 +67,6 @@ class PDFViewer(QMainWindow):
         self.next_page_action.setShortcut("Right")
         self.next_page_action.setEnabled(False)
 
-        # Ações de Zoom
         self.zoom_in_action = QAction(QIcon.fromTheme("zoom-in"), "A&umentar Zoom", self)
         self.zoom_in_action.triggered.connect(self.zoom_in)
         self.zoom_in_action.setShortcut("Ctrl++")
@@ -102,7 +100,6 @@ class PDFViewer(QMainWindow):
                 self.current_page_index = 0
                 self.display_page(self.current_page_index)
                 self.setWindowTitle(f"Leitor Tradutor - {filepath.split('/')[-1]}")
-                # Habilita os botões após abrir o arquivo
                 self.update_navigation_buttons()
                 self.zoom_in_action.setEnabled(True)
                 self.zoom_out_action.setEnabled(True)
@@ -117,25 +114,21 @@ class PDFViewer(QMainWindow):
         self.current_page_index = page_number
         self.status_label.setText(f"Página {page_number + 1} de {self.pdf_document.page_count}")
 
-        # Renderiza a página do PDF como uma imagem
         page = self.pdf_document.load_page(page_number)
         mat = fitz.Matrix(self.zoom_factor, self.zoom_factor)
         pix = page.get_pixmap(matrix=mat)
         
-        # Converte a imagem para o formato do Qt
         image = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888)
         pixmap = QPixmap.fromImage(image)
         self.image_label.setPixmap(pixmap)
+        self.image_label.adjustSize()
 
-        # Extrai as palavras e suas coordenadas (bounding boxes)
         self.word_map.clear()
         words = page.get_text("words")
         for word_info in words:
             x0, y0, x1, y1, text = word_info[:5]
-            # Aplica o mesmo fator de zoom às coordenadas
             rect = QRectF(x0 * self.zoom_factor, y0 * self.zoom_factor,
                           (x1 - x0) * self.zoom_factor, (y1 - y0) * self.zoom_factor)
-            # Armazena o retângulo e a palavra correspondente
             self.word_map.append((rect, text))
         
         self.update_navigation_buttons()
@@ -145,22 +138,20 @@ class PDFViewer(QMainWindow):
         mouse_pos = event.position()
         found_word = False
         
+        tooltip_pos = event.globalPosition().toPoint()
+
         for rect, word_text in self.word_map:
             if rect.contains(mouse_pos):
-                # Limpa a palavra para evitar caracteres estranhos
                 cleaned_word = ''.join(filter(str.isalpha, word_text)).lower()
                 
-                # Evita retraduzir a mesma palavra repetidamente
                 if cleaned_word and self.last_hovered_word != cleaned_word:
                     self.last_hovered_word = cleaned_word
                     try:
-                        # Faz a tradução
                         translation = self.translator.translate(cleaned_word)
-                        # Exibe a tradução na caixinha (Tooltip)
-                        QToolTip.showText(self.mapToGlobal(QPoint(int(mouse_pos.x()), int(mouse_pos.y() + 20))), 
+                        QToolTip.showText(tooltip_pos + QPoint(15, 15), 
                                           f"<b>{word_text}</b><br>{translation}", self.image_label)
                     except Exception:
-                        QToolTip.showText(self.mapToGlobal(QPoint(int(mouse_pos.x()), int(mouse_pos.y() + 20))),
+                        QToolTip.showText(tooltip_pos + QPoint(15, 15),
                                           f"<b>{word_text}</b><br><i>Tradução não encontrada.</i>", self.image_label)
                 found_word = True
                 break
@@ -191,7 +182,6 @@ class PDFViewer(QMainWindow):
         if self.zoom_factor > 0.5:
             self.zoom_factor /= 1.2
             self.display_page(self.current_page_index)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
